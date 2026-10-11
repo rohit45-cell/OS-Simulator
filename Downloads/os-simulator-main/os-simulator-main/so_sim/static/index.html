@@ -1,0 +1,2131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+  <title>OS Simulator · Ganesh M.</title>
+  <!-- Font Awesome 6 (free) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* ============================================================
+       GLOBAL / VARIABLES
+       ============================================================ */
+    :root {
+      --bg: #0a0e14;
+      --bg2: #11161d;
+      --panel: #151b23;
+      --panel-alt: #0d1117;
+      --border: #262d36;
+      --border-light: #303842;
+      --text: #e8edf3;
+      --text2: #8b98a8;
+      --accent: #4f8cff;
+      --accent-hover: #6ba0ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --bad: #f85149;
+      --purple: #8957e5;
+      /* process state colors */
+      --s-new: #388bfd;
+      --s-ready: #d29922;
+      --s-running: #3fb950;
+      --s-blocked: #f85149;
+      --s-terminated: #6e7681;
+      --s-error: #db6d28;
+      --footer-bg: #070a0f;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-md: 0 4px 14px rgba(0,0,0,0.5);
+      --shadow-glow: 0 0 0 3px rgba(79,140,255,0.15);
+      --radius: 10px;
+      --radius-sm: 6px;
+      --transition: 0.18s cubic-bezier(0.4,0,0.2,1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; }
+    h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+    .oculto { display: none !important; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: var(--panel-alt); }
+    ::-webkit-scrollbar-thumb { background: #2a323c; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3a4450; }
+
+    /* ============================================================
+       APP LAYOUT
+       ============================================================ */
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      flex: 1 0 auto;
+      min-height: 100vh;
+    }
+
+    /* ============================================================
+       TOP BAR
+       ============================================================ */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      background: linear-gradient(90deg, #0f141b 0%, #0a0e14 100%);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 10px;
+      box-shadow: var(--shadow-sm);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .brand h1 {
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+    .brand h1 i { color: var(--accent); }
+    .brand .subtitle {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 2px;
+      display: block;
+      font-weight: 400;
+    }
+    .global-status {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .clock {
+      font-size: 12px;
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel-alt);
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .clock b {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .badge {
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      transition: var(--transition);
+    }
+    .badge.paused { background: #2a323c; color: var(--text2); }
+    .badge.running {
+      background: var(--ok);
+      color: #04260f;
+      animation: pulseGlow 1.8s infinite;
+    }
+    .badge.finished { background: var(--accent); color: #04122e; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0.5); }
+      50% { box-shadow: 0 0 0 6px rgba(63,185,80,0); }
+    }
+
+    /* ============================================================
+       CONTROLS
+       ============================================================ */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      padding: 10px 20px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .control-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .control-group.actions { margin-left: auto; }
+    .field {
+      display: flex;
+      flex-direction: column;
+      font-size: 10px;
+      color: var(--text2);
+      gap: 3px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .field select, .field input {
+      margin-top: 1px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    select, input[type=number], input[type=text] {
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 5px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      transition: var(--transition);
+      min-width: 0;
+    }
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: var(--shadow-glow);
+    }
+    .num-input { width: 60px; }
+    .range-wrap { display: flex; align-items: center; gap: 6px; }
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      width: 100px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      background: var(--accent-hover);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn {
+      background: #1e252e;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .btn:hover {
+      background: #2a323c;
+      border-color: var(--border-light);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn:active { transform: translateY(0) scale(0.97); }
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #04122e;
+      font-weight: 700;
+    }
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.danger {
+      background: #3d1f22;
+      border-color: #5c2b2f;
+      color: #ffb3ae;
+    }
+    .btn.danger:hover { background: #5a2b2f; }
+    .btn.success {
+      background: #1b3d24;
+      border-color: #2ea043;
+      color: #8ee29b;
+    }
+    .btn.success:hover { background: #2ea043; color: #04260f; }
+    .btn.mini { padding: 3px 8px; font-size: 11px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* ============================================================
+       DASHBOARD GRID
+       ============================================================ */
+    .dashboard {
+      flex: 1;
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      min-height: 0;
+      grid-template-columns: 1.1fr 1.6fr 1fr;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.8fr);
+      grid-template-areas:
+        "cpu    proc   metrics"
+        "queues memory io"
+        "queues memory log";
+    }
+    .panel-cpu { grid-area: cpu; }
+    .panel-proc { grid-area: proc; }
+    .panel-metrics { grid-area: metrics; }
+    .panel-queues { grid-area: queues; }
+    .panel-memory { grid-area: memory; }
+    .panel-io { grid-area: io; }
+    .panel-log { grid-area: log; }
+
+    /* ============================================================
+       PANELS
+       ============================================================ */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      transition: var(--transition);
+      box-shadow: var(--shadow-sm);
+    }
+    .panel:hover {
+      border-color: var(--border-light);
+      box-shadow: var(--shadow-md);
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #121820;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 38px;
+    }
+    .panel-header h2 {
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .panel-header h2 i { color: var(--accent); font-size: 13px; }
+    .panel-body {
+      padding: 10px 12px;
+      min-height: 0;
+      flex: 1;
+    }
+    .panel-body.scroll { overflow: auto; }
+    .tag {
+      font-size: 10px;
+      color: var(--text2);
+      background: var(--panel-alt);
+      padding: 2px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    /* ============================================================
+       CPU PANEL
+       ============================================================ */
+    .cpu-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+    .cpu-current {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .cpu-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: #0b1020;
+      flex-shrink: 0;
+      transition: var(--transition);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .cpu-avatar:not(.idle):hover {
+      transform: scale(1.06) rotate(-2deg);
+      box-shadow: 0 4px 16px rgba(79,140,255,0.3);
+    }
+    .cpu-avatar.idle {
+      background: #1e252e;
+      color: var(--text2);
+      font-size: 12px;
+      border: 1px dashed var(--border-light);
+    }
+    .cpu-details b { font-size: 14px; display: block; }
+    .cpu-details small { color: var(--text2); font-size: 11px; }
+    .pc-box {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      text-align: center;
+      transition: var(--transition);
+    }
+    .pc-box .label {
+      font-size: 9.5px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 600;
+    }
+    .pc-value {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1.1;
+      transition: var(--transition);
+    }
+    .pc-value.tick {
+      animation: pcPop 0.3s ease;
+      color: #fff;
+    }
+    @keyframes pcPop {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.3); color: #fff; text-shadow: 0 0 12px var(--accent); }
+      100% { transform: scale(1); }
+    }
+    .progress-bar {
+      height: 8px;
+      background: var(--panel-alt);
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress-bar i {
+      display: block;
+      height: 100%;
+      transition: width 0.3s ease;
+      border-radius: 4px;
+    }
+    .ctx-badge {
+      background: linear-gradient(135deg, var(--warn), #e6b422);
+      color: #231a02;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 10.5px;
+      align-self: flex-start;
+      animation: badgePulse 2s infinite;
+      box-shadow: 0 2px 8px rgba(210,153,34,0.3);
+    }
+    @keyframes badgePulse {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.03); }
+    }
+    .dispatch-info {
+      font-size: 11px;
+      color: var(--text2);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .dispatch-info span b { color: var(--text); }
+
+    /* ============================================================
+       PROCESS TABLE
+       ============================================================ */
+    .proc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    .proc-table th, .proc-table td {
+      padding: 4px 6px;
+      text-align: left;
+      border-bottom: 1px solid #1c222a;
+      white-space: nowrap;
+    }
+    .proc-table th {
+      position: sticky;
+      top: 0;
+      background: #121820;
+      color: var(--text2);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      z-index: 1;
+    }
+    .proc-table tbody tr {
+      transition: background 0.15s;
+    }
+    .proc-table tbody tr:hover {
+      background: #1a212b;
+    }
+    .dot-pid {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .state-pill {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #0b1020;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      display: inline-block;
+    }
+    .state-NEW { background: var(--s-new); color: #fff; }
+    .state-READY { background: var(--s-ready); }
+    .state-RUNNING { background: var(--s-running); }
+    .state-BLOCKED { background: var(--s-blocked); color: #fff; }
+    .state-TERMINATED { background: var(--s-terminated); color: #fff; }
+    .state-ERROR { background: var(--s-error); color: #fff; }
+    .mini-progress {
+      height: 6px;
+      background: var(--panel-alt);
+      border-radius: 3px;
+      overflow: hidden;
+      min-width: 50px;
+      border: 1px solid var(--border);
+    }
+    .mini-progress i {
+      display: block;
+      height: 100%;
+      transition: width 0.25s;
+    }
+
+    /* ============================================================
+       QUEUES
+       ============================================================ */
+    .queue-item { margin-bottom: 10px; }
+    .queue-label {
+      font-size: 10.5px;
+      color: var(--text2);
+      margin-bottom: 5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .queue-label i { font-size: 8px; }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .chip {
+      padding: 3px 9px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #0b1020;
+      transition: var(--transition);
+      cursor: default;
+      animation: chipIn 0.25s ease;
+    }
+    @keyframes chipIn {
+      from { opacity: 0; transform: scale(0.7); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .chip:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    }
+    .chip.empty {
+      background: transparent;
+      color: var(--text2);
+      font-weight: 400;
+      font-style: italic;
+      padding: 3px 0;
+    }
+
+    /* ============================================================
+       MEMORY
+       ============================================================ */
+    .tabs {
+      display: flex;
+      gap: 3px;
+    }
+    .tab {
+      background: #1e252e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--text2);
+      transition: var(--transition);
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .tab.active {
+      background: var(--panel);
+      color: var(--text);
+      border-bottom-color: var(--panel);
+    }
+    .tab:hover { background: #2a323c; }
+    .ram-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .ram-stat {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      transition: var(--transition);
+    }
+    .ram-stat:hover { border-color: var(--border-light); }
+    .ram-stat .k {
+      font-size: 9.5px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .ram-stat .v {
+      font-weight: 700;
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+    .ram-bar {
+      height: 10px;
+      border-radius: 5px;
+      background: var(--panel-alt);
+      overflow: hidden;
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      display: flex;
+    }
+    .ram-bar .os { background: var(--purple); transition: width 0.3s; }
+    .ram-bar .proc { background: var(--accent); transition: width 0.3s; }
+    .ram-bar .free { background: #1e252e; transition: width 0.3s; }
+    .frag-badge {
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      display: inline-block;
+      font-size: 10.5px;
+      transition: var(--transition);
+    }
+    .frag-badge:hover { transform: scale(1.05); }
+    .frag-badge.ok { background: #12351d; color: var(--ok); }
+    .frag-badge.warn { background: #3a2f0a; color: var(--warn); }
+    .frag-badge.bad { background: #3d1f22; color: var(--bad); }
+    .blocks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .block {
+      width: 28px;
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      color: #0b1020;
+      border: 1px solid #0d1117;
+      transition: var(--transition);
+      cursor: default;
+    }
+    .block:hover {
+      transform: scale(1.15);
+      z-index: 2;
+      box-shadow: 0 0 10px rgba(255,255,255,0.15);
+    }
+    .block.free { background: #1e252e; color: var(--text2); border-color: var(--border); }
+    .block.os { background: var(--purple); color: #fff; }
+    .frame-stats {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .frame-stat {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+      text-align: center;
+      flex: 1;
+      transition: var(--transition);
+    }
+    .frame-stat:hover { border-color: var(--accent); }
+    .frame-stat b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .frame-stat span { font-size: 9.5px; color: var(--text2); text-transform: uppercase; }
+    .frames {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+    .frame {
+      min-width: 56px;
+      padding: 5px 4px;
+      border-radius: var(--radius-sm);
+      color: #0b1020;
+      font-size: 11px;
+      text-align: center;
+      position: relative;
+      transition: var(--transition);
+      font-weight: 600;
+    }
+    .frame:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+    .frame.free { background: #1e252e; color: var(--text2); border: 1px dashed var(--border-light); }
+    .frame.victim { outline: 2px solid var(--bad); }
+    .frame small { display: block; font-size: 9px; font-weight: 400; opacity: 0.85; }
+    .clock-ptr {
+      position: absolute;
+      top: -10px;
+      right: -4px;
+      font-size: 12px;
+      animation: bounce 1s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    .last-access {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--panel-alt);
+      margin-top: 6px;
+      transition: var(--transition);
+    }
+    .last-access.hit { border-left: 3px solid var(--ok); }
+    .last-access.fault { border-left: 3px solid var(--bad); }
+    .page-table { margin-top: 8px; }
+    .page-table .title { font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+    .page-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+    }
+    .page-table th, .page-table td {
+      border: 1px solid #1c222a;
+      padding: 2px 6px;
+      text-align: center;
+    }
+    .page-table th { background: #121820; color: var(--text2); font-weight: 600; }
+
+    /* ============================================================
+       I/O DEVICES
+       ============================================================ */
+    .io-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .device {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      transition: var(--transition);
+    }
+    .device:hover {
+      border-color: var(--border-light);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+    .device.flash {
+      animation: deviceFlash 0.5s ease;
+    }
+    @keyframes deviceFlash {
+      0% { box-shadow: 0 0 0 0 rgba(210,153,34,0.6); }
+      50% { box-shadow: 0 0 0 8px rgba(210,153,34,0); }
+      100% { box-shadow: 0 0 0 0 rgba(210,153,34,0); }
+    }
+    .device .name {
+      font-weight: 700;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .device .type {
+      font-size: 9px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+    .device .service {
+      font-size: 11px;
+      margin: 5px 0;
+      color: var(--text2);
+    }
+    .device .queue {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-height: 18px;
+    }
+    .io-decision {
+      background: #3a2f0a;
+      border: 1px solid var(--warn);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .io-decision b { color: var(--warn); }
+    .io-decision .actions { display: flex; gap: 8px; margin-top: 6px; }
+
+    /* ============================================================
+       METRICS
+       ============================================================ */
+    .metrics-summary {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .metric-card {
+      flex: 1;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px;
+      text-align: center;
+      transition: var(--transition);
+    }
+    .metric-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .metric-card b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .metric-card span { font-size: 9.5px; color: var(--text2); text-transform: uppercase; }
+    .metric-card.error b { color: var(--s-error); }
+    .metric-card.success b { color: var(--ok); }
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    .metrics-table th, .metrics-table td {
+      padding: 3px 6px;
+      border-bottom: 1px solid #1c222a;
+      text-align: center;
+    }
+    .metrics-table th {
+      color: var(--text2);
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .metrics-table .avg {
+      font-weight: 700;
+      background: #121820;
+    }
+
+    /* ============================================================
+       LOG
+       ============================================================ */
+    .log-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      font-size: 11px;
+    }
+    .log-list li {
+      display: flex;
+      gap: 8px;
+      padding: 4px 6px;
+      border-bottom: 1px solid #171d25;
+      align-items: baseline;
+      animation: logIn 0.25s ease;
+      transition: background 0.15s;
+    }
+    .log-list li:hover { background: #1a212b; }
+    @keyframes logIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .log-list li .time {
+      color: var(--text2);
+      min-width: 32px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-size: 10.5px;
+    }
+    .log-list li .event-badge {
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-weight: 700;
+      min-width: 62px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .log-list li.recent { background: #121820; }
+    .ev-io { background: #0d3a52; color: #7fd3ff; }
+    .ev-clock { background: #3a2f0a; color: #ffd479; }
+    .ev-abort { background: #3d1f22; color: #ffb3ae; }
+    .ev-ctx { background: #2a2140; color: #c9b3ff; }
+    .ev-keyboard { background: #12351d; color: #8ee29b; }
+    .ev-other { background: #1e252e; color: var(--text2); }
+
+    /* ============================================================
+       GANTT (collapsible)
+       ============================================================ */
+    .gantt-details {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      padding: 6px 16px;
+      transition: var(--transition);
+    }
+    .gantt-details summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text2);
+      padding: 4px 0;
+      user-select: none;
+      transition: color 0.15s;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .gantt-details summary::-webkit-details-marker { display: none; }
+    .gantt-details summary::before {
+      content: '▶';
+      font-size: 9px;
+      transition: transform 0.2s;
+      color: var(--accent);
+    }
+    .gantt-details[open] summary::before { transform: rotate(90deg); }
+    .gantt-details summary:hover { color: var(--text); }
+    .gantt-scroll {
+      overflow-x: auto;
+      margin-top: 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+    }
+
+    /* ============================================================
+       MODALS
+       ============================================================ */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      animation: modalFade 0.2s ease;
+      padding: 16px;
+    }
+    @keyframes modalFade {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      width: min(940px, 100%);
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+      animation: modalUp 0.25s ease;
+    }
+    @keyframes modalUp {
+      from { transform: translateY(24px); opacity: 0.8; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 { font-size: 14px; }
+    .modal-body { padding: 16px 18px; overflow: auto; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .fieldset {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--panel-alt);
+    }
+    .fieldset legend {
+      font-size: 11px;
+      color: var(--accent);
+      padding: 0 6px;
+      font-weight: 600;
+    }
+    .fieldset label {
+      display: flex;
+      flex-direction: column;
+      font-size: 10px;
+      color: var(--text2);
+      gap: 3px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .fieldset label.checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .fieldset label input, .fieldset label select {
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .editor-proc {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      margin-bottom: 10px;
+      background: var(--panel-alt);
+    }
+    .editor-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .editor-row label {
+      display: flex;
+      flex-direction: column;
+      font-size: 10px;
+      color: var(--text2);
+      gap: 3px;
+      font-weight: 500;
+    }
+    .editor-sub {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .editor-block-title {
+      font-size: 11px;
+      color: var(--text2);
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    .editor-line {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 5px;
+      font-size: 11px;
+    }
+    .help-text {
+      font-size: 11px;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+    .error-text {
+      color: var(--bad);
+      font-weight: 700;
+      min-height: 18px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .input-error { border-color: var(--bad) !important; }
+
+    /* Comparison tables */
+    .comp-table { margin-bottom: 20px; }
+    .comp-table h3 { font-size: 13px; margin: 0 0 8px; color: var(--accent); }
+    .comp-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .comp-table th, .comp-table td {
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: center;
+    }
+    .comp-table th { background: #121820; color: var(--text2); font-weight: 600; }
+    .comp-table td.best { background: #12351d; color: var(--ok); font-weight: 700; }
+
+    /* ============================================================
+       FOOTER
+       ============================================================ */
+    .footer {
+      background: var(--footer-bg);
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 1.5rem 1.25rem;
+      font-size: 0.9rem;
+      color: var(--text2);
+      margin-top: auto;
+      position: relative;
+    }
+    .footer::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.4;
+    }
+    .footer-main {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 0.9fr;
+      gap: 2.5rem;
+      max-width: 1200px;
+      margin: 0 auto 1.75rem;
+    }
+    .footer-profile {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .footer-avatar {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.5rem;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 16px rgba(79,140,255,0.35);
+      transition: var(--transition);
+    }
+    .footer-avatar:hover {
+      transform: scale(1.08) rotate(5deg);
+      box-shadow: 0 6px 24px rgba(79,140,255,0.5);
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+    .footer-profile h2 {
+      font-size: 1.3rem;
+      color: var(--text);
+      margin-bottom: 0.2rem;
+      font-weight: 700;
+    }
+    .footer-role { font-size: 0.8rem; color: var(--text2); }
+    .footer-role span { margin: 0 5px; color: var(--accent); }
+    .footer-location {
+      font-size: 0.78rem;
+      color: var(--text2);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .footer-location i { color: var(--accent); }
+    .footer-about h3, .footer-connect h3 {
+      font-size: 0.95rem;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+      font-weight: 600;
+      position: relative;
+      padding-bottom: 0.5rem;
+    }
+    .footer-about h3::after, .footer-connect h3::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 32px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+    }
+    .footer-about p, .footer-connect p {
+      font-size: 0.82rem;
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+    .footer-skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .footer-skills span {
+      background: #151b23;
+      border: 1px solid var(--border);
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      color: var(--text2);
+      transition: var(--transition);
+    }
+    .footer-skills span:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .footer-social {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .footer-social a {
+      color: var(--text2);
+      font-size: 1.15rem;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #151b23;
+      border: 1px solid var(--border);
+    }
+    .footer-social a:hover {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 6px 16px rgba(79,140,255,0.4);
+    }
+    .footer-bottom {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 1.25rem;
+      border-top: 1px solid #151b23;
+      font-size: 0.78rem;
+      gap: 1rem;
+    }
+    .footer-bottom p {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .footer-heart {
+      color: var(--bad);
+      animation: heartBeat 1.6s infinite;
+    }
+    @keyframes heartBeat {
+      0% { transform: scale(1); }
+      20% { transform: scale(1.25); }
+      40% { transform: scale(1); }
+      60% { transform: scale(1.2); }
+      80% { transform: scale(1); }
+      100% { transform: scale(1); }
+    }
+    .back-to-top {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: var(--transition);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid transparent;
+    }
+    .back-to-top:hover {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: translateY(-3px);
+    }
+
+    /* ============================================================
+       RESPONSIVE MEDIA QUERIES
+       ============================================================ */
+
+    /* Large tablets / small laptops */
+    @media (max-width: 1200px) {
+      .dashboard {
+        grid-template-columns: 1fr 1.4fr;
+        grid-template-rows: auto auto auto auto auto;
+        grid-template-areas:
+          "cpu proc"
+          "metrics queues"
+          "memory memory"
+          "io io"
+          "log log";
+      }
+      .footer-main {
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+      .footer-connect {
+        grid-column: span 2;
+      }
+      .control-group.actions { margin-left: 0; }
+    }
+
+    /* Tablets portrait */
+    @media (max-width: 900px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(7, auto);
+        grid-template-areas:
+          "cpu"
+          "proc"
+          "metrics"
+          "queues"
+          "memory"
+          "io"
+          "log";
+      }
+      .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .global-status { width: 100%; justify-content: space-between; }
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .control-group { justify-content: space-between; }
+      .control-group.actions { flex-wrap: wrap; justify-content: flex-start; }
+      .footer-main {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+      .footer-connect { grid-column: span 1; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+      .footer-about h3::after, .footer-connect h3::after { left: 50%; transform: translateX(-50%); }
+      .footer-about h3, .footer-connect h3 { text-align: center; }
+      .footer-connect p, .footer-about p { text-align: center; }
+      .footer-social { justify-content: center; }
+      .footer-skills { justify-content: center; }
+    }
+
+    /* Phones */
+    @media (max-width: 560px) {
+      body { font-size: 12px; }
+      .top-bar { padding: 8px 12px; }
+      .brand h1 { font-size: 14px; }
+      .brand .subtitle { font-size: 10px; }
+      .controls { padding: 8px 12px; gap: 8px; }
+      .dashboard { padding: 6px; gap: 6px; }
+      .panel-header { padding: 6px 10px; }
+      .panel-header h2 { font-size: 11.5px; }
+      .panel-body { padding: 8px; }
+      .cpu-avatar { width: 44px; height: 44px; font-size: 14px; }
+      .pc-value { font-size: 24px; }
+      .io-grid { grid-template-columns: 1fr; }
+      .ram-stats { grid-template-columns: 1fr; }
+      .metrics-summary { flex-wrap: wrap; }
+      .metric-card { min-width: 70px; }
+      .editor-sub { grid-template-columns: 1fr; }
+      .modal-body { padding: 12px; }
+      .fieldset { padding: 8px 10px; gap: 8px; }
+      .footer { padding: 1.75rem 1rem 1rem; }
+      .footer-avatar { width: 48px; height: 48px; font-size: 1.2rem; }
+      .footer-profile h2 { font-size: 1.1rem; }
+      .footer-social a { width: 34px; height: 34px; font-size: 1rem; }
+    }
+
+    /* Very small phones */
+    @media (max-width: 380px) {
+      .control-group { flex-wrap: wrap; gap: 5px; }
+      .btn { padding: 5px 8px; font-size: 11px; }
+      .num-input { width: 48px; }
+      .pc-value { font-size: 20px; }
+      .frame { min-width: 44px; font-size: 10px; }
+      .block { width: 22px; height: 18px; font-size: 8px; }
+    }
+
+    /* High contrast / reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-wrapper" id="top">
+    <!-- ===================== TOP BAR ===================== -->
+    <header class="top-bar">
+      <div class="brand">
+        <h1><i class="fa-solid fa-microchip"></i> OS Simulator</h1>
+        <span class="subtitle">Processes · Physical Memory · I/O · Paging (Advanced Module)</span>
+      </div>
+      <div class="global-status">
+        <div class="clock">
+          <i class="fa-solid fa-clock"></i>
+          tick <b id="tick-counter">0</b>
+        </div>
+        <div id="sim-state" class="badge paused">PAUSED</div>
+      </div>
+    </header>
+
+    <!-- ===================== CONTROLS ===================== -->
+    <section class="controls">
+      <div class="control-group">
+        <button id="btn-play" class="btn primary" title="Play"><i class="fa-solid fa-play"></i></button>
+        <button id="btn-pause" class="btn" title="Pause"><i class="fa-solid fa-pause"></i></button>
+        <button id="btn-step" class="btn" title="Step"><i class="fa-solid fa-forward-step"></i></button>
+        <button id="btn-reset" class="btn danger" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+      </div>
+
+      <div class="control-group">
+        <label class="field">Speed
+          <div class="range-wrap">
+            <input type="range" id="speed" min="50" max="2000" step="50" value="600">
+            <span id="speed-label" class="mono">600 ms</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label class="field">Scheduler
+          <select id="scheduler-select">
+            <optgroup label="Mandatory">
+              <option value="fcfs">FCFS</option>
+              <option value="sjf">SJF (non-preemptive)</option>
+              <option value="priority_pre">Priority (preemptive)</option>
+              <option value="rr">Round Robin</option>
+            </optgroup>
+            <optgroup label="Additional">
+              <option value="srtf">SRTF</option>
+              <option value="priority_np">Priority (non-preemptive)</option>
+              <option value="mlq">MLQ</option>
+            </optgroup>
+          </select>
+        </label>
+        <label id="quantum-wrap" class="field">Quantum
+          <input type="number" id="quantum-input" min="1" max="20" value="3" class="num-input">
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label class="field">Memory Strategy
+          <select id="strategy-select">
+            <option value="first_fit">First-Fit</option>
+            <option value="best_fit">Best-Fit</option>
+            <option value="worst_fit">Worst-Fit</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label class="field">Scenario
+          <select id="preset-select">
+            <option value="default">Default (5 processes)</option>
+            <option value="demo20">Demo 20 processes</option>
+            <option value="io_heavy">I/O Heavy</option>
+            <option value="cpu_heavy">CPU Heavy</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="control-group actions">
+        <button id="btn-demo" class="btn success"><i class="fa-solid fa-users"></i> Load 20 Demo</button>
+        <button id="btn-random" class="btn"><i class="fa-solid fa-dice"></i> Random</button>
+        <button id="btn-editor" class="btn"><i class="fa-solid fa-pen"></i> Create Process</button>
+        <button id="btn-compare" class="btn"><i class="fa-solid fa-chart-bar"></i> Compare</button>
+      </div>
+    </section>
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <main class="dashboard">
+      <!-- CPU -->
+      <section class="panel panel-cpu">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-brain"></i> CPU</h2>
+          <span id="cpu-algo" class="tag">Round Robin</span>
+        </div>
+        <div class="panel-body" id="cpu-body"></div>
+      </section>
+
+      <!-- PROCESSES -->
+      <section class="panel panel-proc">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-list-check"></i> Process Table (PCB)</h2>
+          <span id="proc-count" class="tag">5 processes</span>
+        </div>
+        <div class="panel-body scroll">
+          <table class="proc-table">
+            <thead>
+              <tr>
+                <th>PID</th><th>Name</th><th>State</th><th>PC</th><th>Prio</th>
+                <th>Rem.</th><th>Size</th><th>Addr</th><th>Progress</th>
+              </tr>
+            </thead>
+            <tbody id="proc-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- METRICS -->
+      <section class="panel panel-metrics">
+        <div class="panel-header"><h2><i class="fa-solid fa-chart-line"></i> Metrics</h2></div>
+        <div class="panel-body scroll" id="metrics-body"></div>
+      </section>
+
+      <!-- QUEUES -->
+      <section class="panel panel-queues">
+        <div class="panel-header"><h2><i class="fa-solid fa-layer-group"></i> Queues</h2></div>
+        <div class="panel-body scroll" id="queues-body"></div>
+      </section>
+
+      <!-- MEMORY -->
+      <section class="panel panel-memory">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-memory"></i> Physical Memory</h2>
+          <div class="tabs">
+            <button class="tab active" data-tab="physical">Physical</button>
+            <button class="tab" data-tab="paging">Paging (PLUS)</button>
+          </div>
+        </div>
+        <div class="panel-body scroll">
+          <div id="tab-physical"></div>
+          <div id="tab-paging" class="oculto"></div>
+        </div>
+      </section>
+
+      <!-- I/O -->
+      <section class="panel panel-io">
+        <div class="panel-header"><h2><i class="fa-solid fa-network-wired"></i> I/O Devices</h2></div>
+        <div class="panel-body scroll">
+          <div id="io-decision" class="io-decision oculto"></div>
+          <div id="io-devices" class="io-grid"></div>
+        </div>
+      </section>
+
+      <!-- LOG -->
+      <section class="panel panel-log">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-scroll"></i> System Log</h2>
+          <div>
+            <button id="btn-log-clear" class="btn mini">Clear</button>
+            <button id="btn-log-export" class="btn mini">Export .txt</button>
+          </div>
+        </div>
+        <div class="panel-body scroll">
+          <ul id="log-list" class="log-list"></ul>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===================== GANTT ===================== -->
+    <details class="gantt-details">
+      <summary><i class="fa-solid fa-chart-gantt"></i> Gantt Chart (CPU per tick)</summary>
+      <div class="gantt-scroll">
+        <canvas id="gantt-canvas" height="110"></canvas>
+      </div>
+    </details>
+
+    <!-- ===================== EDITOR MODAL ===================== -->
+    <div id="modal-editor" class="modal oculto">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-pen"></i> Create / Edit Processes</h2>
+          <button id="editor-close" class="btn mini"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <fieldset class="fieldset">
+            <legend>Global Parameters</legend>
+            <label>Scheduler
+              <select id="ed-scheduler">
+                <option value="fcfs">FCFS</option>
+                <option value="sjf">SJF</option>
+                <option value="priority_pre">Priority (preemptive)</option>
+                <option value="rr">Round Robin</option>
+                <option value="srtf">SRTF</option>
+                <option value="priority_np">Priority (non-preemptive)</option>
+                <option value="mlq">MLQ</option>
+              </select>
+            </label>
+            <label>Quantum <input id="ed-quantum" type="number" min="1" max="20" value="3" class="num-input"></label>
+            <label>Context Switch Cost <input id="ed-ctx-cost" type="number" min="0" max="10" value="0" class="num-input"></label>
+            <label>Error Rate % <input id="ed-error-rate" type="number" min="0" max="100" step="0.1" value="0" class="num-input"></label>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Physical Memory (required)</legend>
+            <label>Total RAM (KB) <input id="ed-ram" type="number" min="256" value="16384" class="num-input"></label>
+            <label>OS RAM (KB) <input id="ed-ram-os" type="number" min="0" value="2048" class="num-input"></label>
+            <label>Block Size (KB) <input id="ed-block" type="number" min="32" max="2048" value="256" class="num-input"></label>
+            <label>Strategy
+              <select id="ed-strategy">
+                <option value="first_fit">First-Fit</option>
+                <option value="best_fit">Best-Fit</option>
+                <option value="worst_fit">Worst-Fit</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>Paging (Advanced Module)</legend>
+            <label class="checkbox"><input id="ed-paging" type="checkbox" checked> Enable paging</label>
+            <label>Frames <input id="ed-frames" type="number" min="1" max="32" value="4" class="num-input"></label>
+            <label>Offset Bits <input id="ed-offset" type="number" min="4" max="16" value="12" class="num-input"></label>
+            <label>Replacement
+              <select id="ed-replacement">
+                <option value="fifo">FIFO</option>
+                <option value="lru">LRU</option>
+                <option value="optimal">Optimal</option>
+                <option value="clock">Clock</option>
+              </select>
+            </label>
+            <label>Devices <input id="ed-devices" type="text" value="Keyboard, Disk, Printer, Mouse, Network" size="34"></label>
+          </fieldset>
+
+          <div id="editor-processes"></div>
+          <div style="margin: 8px 0;">
+            <button id="editor-add" class="btn"><i class="fa-solid fa-plus"></i> Add Process</button>
+          </div>
+          <p class="help-text">
+            <b>Declarative mode</b>: you define I/O explicitly. <b>Random mode</b>: generated with system formulas.
+            <b>Memory accesses</b> (page/VPN) apply only to the paging module.
+          </p>
+          <div id="editor-error" class="error-text"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="editor-cancel" class="btn">Cancel</button>
+          <button id="editor-load" class="btn primary">Load into Simulator</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== COMPARE MODAL ===================== -->
+    <div id="modal-compare" class="modal oculto">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-chart-bar"></i> Algorithm & Strategy Comparison</h2>
+          <button id="compare-close" class="btn mini"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <p class="help-text">Runs the current scenario with each option (without affecting the live simulation).</p>
+          <div id="compare-tables"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="compare-csv-sched" class="btn"><i class="fa-solid fa-file-csv"></i> Export schedulers .csv</button>
+          <button id="compare-csv-mem" class="btn"><i class="fa-solid fa-file-csv"></i> Export strategies .csv</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== FOOTER ===================== -->
+    <footer class="footer">
+      <div class="footer-main">
+        <div class="footer-profile">
+          <div class="footer-avatar" aria-hidden="true">GM</div>
+          <div>
+            <p class="eyebrow">BUILT BY</p>
+            <h2>Ganesh M.</h2>
+            <p class="footer-role">Software Development Engineer <span>·</span> Python Full Stack Developer</p>
+            <p class="footer-location"><i class="fa-solid fa-location-dot"></i> Bengaluru, India</p>
+          </div>
+        </div>
+        <div class="footer-about">
+          <h3>About this project</h3>
+          <p>An interactive learning dashboard for exploring CPU scheduling, process states, memory allocation, paging and I/O operations.</p>
+          <div class="footer-skills">
+            <span>Python</span>
+            <span>Operating Systems</span>
+            <span>Full Stack</span>
+          </div>
+        </div>
+        <div class="footer-connect">
+          <h3>Connect with me</h3>
+          <p>Find my work and professional profile online.</p>
+          <div class="footer-social">
+            <a href="https://github.com/rohit45-cell" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub"><i class="fa-brands fa-github"></i></a>
+            <a href="https://linkedin.com/in/ganesh-murugan-b86674295" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
+            <a href="https://ganesh45.netlify.app" target="_blank" rel="noopener noreferrer" aria-label="Portfolio website" title="Portfolio"><i class="fa-solid fa-globe"></i></a>
+            <a href="mailto:ganeshmuruga2005@gmail.com" aria-label="Email Ganesh" title="Email"><i class="fa-regular fa-envelope"></i></a>
+            <a href="tel:+919843071313" aria-label="Call Ganesh" title="Phone"><i class="fa-solid fa-phone"></i></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© <span id="footer-year"></span> <strong>Ganesh M.</strong> All rights reserved.</p>
+        <p>Designed for learning <i class="fa-solid fa-heart footer-heart"></i> Operating Systems</p>
+        <a class="back-to-top" href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Back to top <i class="fa-solid fa-arrow-up"></i></a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ===================== JAVASCRIPT ===================== -->
+  <script>
+    // Footer year
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+    // ============================================================
+    // SIMULATION STATE
+    // ============================================================
+    const state = {
+      tick: 0,
+      running: false,
+      scheduler: 'rr',
+      quantum: 3,
+      strategy: 'first_fit',
+      processes: [
+        { pid: 1, name: 'init',     state: 'READY',      pc: 0, prio: 0, rem: 10, size: 128,  addr: '0x000', prog: 0,   color: '#4f8cff' },
+        { pid: 2, name: 'shell',    state: 'RUNNING',    pc: 3, prio: 1, rem: 7,  size: 256,  addr: '0x100', prog: 40,  color: '#3fb950' },
+        { pid: 3, name: 'editor',   state: 'BLOCKED',    pc: 1, prio: 2, rem: 5,  size: 512,  addr: '0x200', prog: 20,  color: '#d29922' },
+        { pid: 4, name: 'server',   state: 'NEW',        pc: 0, prio: 1, rem: 12, size: 384,  addr: '—',     prog: 0,   color: '#388bfd' },
+        { pid: 5, name: 'logger',   state: 'TERMINATED', pc: 8, prio: 3, rem: 0,  size: 64,   addr: '0x080', prog: 100, color: '#6e7681' },
+      ],
+      devices: ['Keyboard', 'Disk', 'Printer', 'Mouse', 'Network'],
+      deviceQueues: {
+        'Keyboard': ['P2'],
+        'Disk': ['P3'],
+        'Printer': [],
+        'Mouse': [],
+        'Network': ['P1']
+      },
+      frames: [
+        { pid: 'P1', page: 0, color: '#4f8cff' },
+        { pid: 'P2', page: 2, color: '#3fb950' },
+        { pid: null, page: null, color: null },
+        { pid: null, page: null, color: null },
+      ]
+    };
+
+    // ============================================================
+    // RENDERING FUNCTIONS
+    // ============================================================
+    function renderCPU() {
+      const el = document.getElementById('cpu-body');
+      if (!el) return;
+      const running = state.processes.find(p => p.state === 'RUNNING');
+      if (running) {
+        el.innerHTML = `
+          <div class="cpu-container">
+            <div class="cpu-current">
+              <div class="cpu-avatar" style="background:${running.color}">P${running.pid}</div>
+              <div class="cpu-details">
+                <b>${running.name}</b>
+                <small>PID ${running.pid} · Priority ${running.prio}</small>
+              </div>
+            </div>
+            <div class="pc-box">
+              <div class="label">Program Counter</div>
+              <div class="pc-value" id="pc-display">${running.pc}</div>
+            </div>
+            <div class="progress-bar"><i style="width:${running.prog}%;background:${running.color}"></i></div>
+            <div class="dispatch-info">
+              <span>Remaining: <b>${running.rem}</b> ticks</span>
+              <span>State: <b>${running.state}</b></span>
+            </div>
+          </div>
+        `;
+        document.getElementById('cpu-algo').textContent =
+          state.scheduler.toUpperCase() + (state.scheduler === 'rr' ? ` (q=${state.quantum})` : '');
+      } else {
+        el.innerHTML = `
+          <div class="cpu-container" style="justify-content:center;align-items:center;color:var(--text2);">
+            <div class="cpu-avatar idle"><i class="fa-solid fa-power-off"></i></div>
+            <p style="margin-top:10px;font-size:13px;">CPU Idle</p>
+          </div>
+        `;
+        document.getElementById('cpu-algo').textContent = '—';
+      }
+    }
+
+    function renderProcesses() {
+      const tbody = document.getElementById('proc-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = state.processes.map(p => {
+        const stateClass = `state-${p.state}`;
+        return `<tr>
+          <td><span class="dot-pid" style="background:${p.color}"></span>${p.pid}</td>
+          <td>${p.name}</td>
+          <td><span class="state-pill ${stateClass}">${p.state}</span></td>
+          <td>${p.pc}</td>
+          <td>${p.prio}</td>
+          <td>${p.rem}</td>
+          <td>${p.size}K</td>
+          <td class="mono">${p.addr}</td>
+          <td><div class="mini-progress"><i style="width:${p.prog}%;background:${p.color}"></i></div></td>
+        </tr>`;
+      }).join('');
+      document.getElementById('proc-count').textContent = `${state.processes.length} processes`;
+    }
+
+    function renderQueues() {
+      const el = document.getElementById('queues-body');
+      if (!el) return;
+      const ready = state.processes.filter(p => p.state === 'READY').map(p => `P${p.pid}`);
+      const running = state.processes.filter(p => p.state === 'RUNNING').map(p => `P${p.pid}`);
+      const blocked = state.processes.filter(p => p.state === 'BLOCKED').map(p => `P${p.pid}`);
+      const newP = state.processes.filter(p => p.state === 'NEW').map(p => `P${p.pid}`);
+
+      el.innerHTML = `
+        <div class="queue-item">
+          <div class="queue-label"><i class="fa-solid fa-circle" style="color:#388bfd"></i> New</div>
+          <div class="chips">${newP.length ? newP.map(p => `<span class="chip" style="background:#388bfd;color:#fff">${p}</span>`).join('') : '<span class="chip empty">empty</span>'}</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-label"><i class="fa-solid fa-circle" style="color:#d29922"></i> Ready</div>
+          <div class="chips">${ready.length ? ready.map(p => `<span class="chip" style="background:#d29922">${p}</span>`).join('') : '<span class="chip empty">empty</span>'}</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-label"><i class="fa-solid fa-circle" style="color:#3fb950"></i> Running</div>
+          <div class="chips">${running.length ? running.map(p => `<span class="chip" style="background:#3fb950">${p}</span>`).join('') : '<span class="chip empty">empty</span>'}</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-label"><i class="fa-solid fa-circle" style="color:#f85149"></i> Blocked</div>
+          <div class="chips">${blocked.length ? blocked.map(p => `<span class="chip" style="background:#f85149;color:#fff">${p}</span>`).join('') : '<span class="chip empty">empty</span>'}</div>
+        </div>
+      `;
+    }
+
+    function renderIO() {
+      const el = document.getElementById('io-devices');
+      if (!el) return;
+      el.innerHTML = state.devices.map(dev => {
+        const queue = state.deviceQueues[dev] || [];
+        return `<div class="device">
+          <div class="name">${dev} <span class="type">I/O</span></div>
+          <div class="service">Queue: ${queue.length} process(es)</div>
+          <div class="queue">${queue.map(pid => `<span class="chip" style="background:#4f8cff">${pid}</span>`).join('')}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderLog() {
+      const ul = document.getElementById('log-list');
+      if (!ul) return;
+      const events = [
+        { t: 0, ev: 'SYSTEM', msg: 'Simulator ready · 5 processes loaded' },
+        { t: 1, ev: 'CLOCK', msg: 'Tick 1 · Round Robin executes P2' },
+        { t: 2, ev: 'I/O', msg: 'P3 requests Disk' },
+        { t: 3, ev: 'CTX', msg: 'Context switch P2 → P1' },
+      ];
+      ul.innerHTML = events.map(e => `
+        <li>
+          <span class="time">${e.t}</span>
+          <span class="event-badge ev-${e.ev.toLowerCase()}">${e.ev}</span>
+          <span>${e.msg}</span>
+        </li>
+      `).join('');
+    }
+
+    function renderMemory() {
+      const phys = document.getElementById('tab-physical');
+      if (!phys) return;
+      phys.innerHTML = `
+        <div class="ram-stats">
+          <div class="ram-stat"><div class="k">Total RAM</div><div class="v">16,384 KB</div></div>
+          <div class="ram-stat"><div class="k">OS Reserved</div><div class="v">2,048 KB</div></div>
+        </div>
+        <div class="ram-bar">
+          <div class="os" style="width:12.5%"></div>
+          <div class="proc" style="width:25%"></div>
+          <div class="free" style="width:62.5%"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;">
+          <span class="frag-badge ok">External fragmentation: 0 KB</span>
+          <span class="frag-badge warn">Internal fragmentation: 128 KB</span>
+        </div>
+        <div class="blocks">
+          <div class="block os">OS</div>
+          <div class="block" style="background:#4f8cff;color:#fff">P1</div>
+          <div class="block" style="background:#3fb950;color:#fff">P2</div>
+          <div class="block free">—</div>
+          <div class="block free">—</div>
+          <div class="block" style="background:#d29922;color:#fff">P3</div>
+          <div class="block free">—</div>
+          <div class="block" style="background:#4f8cff;color:#fff">P4</div>
+        </div>
+        <div class="last-access hit" style="margin-top:10px;">Last access: Page 0x1A → frame 2 · HIT</div>
+      `;
+
+      const pag = document.getElementById('tab-paging');
+      if (pag) {
+        pag.innerHTML = `
+          <div class="frame-stats">
+            <div class="frame-stat"><b>4</b><span>frames</span></div>
+            <div class="frame-stat"><b>2</b><span>used</span></div>
+            <div class="frame-stat"><b>2</b><span>free</span></div>
+          </div>
+          <div class="frames">
+            ${state.frames.map((f, i) => {
+              if (f.pid) {
+                return `<div class="frame" style="background:${f.color};color:#fff">${f.pid}<small>Page ${f.page}</small></div>`;
+              }
+              return `<div class="frame free">—</div>`;
+            }).join('')}
+          </div>
+          <div class="last-access fault">Page fault: VPN 0x3 not present</div>
+          <div class="page-table">
+            <div class="title">Page Table (P1)</div>
+            <table>
+              <thead><tr><th>VPN</th><th>Frame</th><th>Valid</th></tr></thead>
+              <tbody>
+                <tr><td>0</td><td>0</td><td>✓</td></tr>
+                <tr><td>1</td><td>—</td><td>✗</td></tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+    }
+
+    function renderMetrics() {
+      const el = document.getElementById('metrics-body');
+      if (!el) return;
+      el.innerHTML = `
+        <div class="metrics-summary">
+          <div class="metric-card success"><b>5</b><span>processes</span></div>
+          <div class="metric-card"><b>3</b><span>ready/run</span></div>
+          <div class="metric-card error"><b>1</b><span>blocked</span></div>
+        </div>
+        <table class="metrics-table">
+          <thead><tr><th>PID</th><th>Wait</th><th>Turnaround</th><th>CPU</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>4</td><td>14</td><td>10</td></tr>
+            <tr><td>2</td><td>0</td><td>7</td><td>7</td></tr>
+            <tr><td>3</td><td>3</td><td>8</td><td>5</td></tr>
+            <tr><td>4</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>5</td><td>1</td><td>9</td><td>8</td></tr>
+            <tr class="avg"><td>Avg</td><td>2.0</td><td>9.5</td><td>7.5</td></tr>
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderAll() {
+      renderCPU();
+      renderProcesses();
+      renderQueues();
+      renderIO();
+      renderLog();
+      renderMemory();
+      renderMetrics();
+      document.getElementById('tick-counter').textContent = state.tick;
+    }
+
+    // ============================================================
+    // INTERACTIVITY
+    // ============================================================
+    document.getElementById('btn-play')?.addEventListener('click', () => {
+      state.running = true;
+      const badge = document.getElementById('sim-state');
+      badge.className = 'badge running';
+      badge.textContent = 'RUNNING';
+    });
+
+    document.getElementById('btn-pause')?.addEventListener('click', () => {
+      state.running = false;
+      const badge = document.getElementById('sim-state');
+      badge.className = 'badge paused';
+      badge.textContent = 'PAUSED';
+    });
+
+    document.getElementById('btn-step')?.addEventListener('click', () => {
+      state.tick++;
+      const pc = document.getElementById('pc-display');
+      if (pc) {
+        pc.classList.add('tick');
+        setTimeout(() => pc.classList.remove('tick'), 300);
+        pc.textContent = parseInt(pc.textContent || 0) + 1;
+      }
+      renderAll();
+    });
+
+    document.getElementById('btn-reset')?.addEventListener('click', () => {
+      state.tick = 0;
+      state.running = false;
+      const badge = document.getElementById('sim-state');
+      badge.className = 'badge paused';
+      badge.textContent = 'PAUSED';
+      renderAll();
+    });
+
+    document.getElementById('speed')?.addEventListener('input', (e) => {
+      document.getElementById('speed-label').textContent = e.target.value + ' ms';
+    });
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        document.getElementById('tab-physical').classList.toggle('oculto', target !== 'physical');
+        document.getElementById('tab-paging').classList.toggle('oculto', target !== 'paging');
+      });
+    });
+
+    // Modals
+    document.getElementById('btn-editor')?.addEventListener('click', () => {
+      document.getElementById('modal-editor').classList.remove('oculto');
+    });
+    document.getElementById('editor-close')?.addEventListener('click', () => {
+      document.getElementById('modal-editor').classList.add('oculto');
+    });
+    document.getElementById('editor-cancel')?.addEventListener('click', () => {
+      document.getElementById('modal-editor').classList.add('oculto');
+    });
+
+    document.getElementById('btn-compare')?.addEventListener('click', () => {
+      document.getElementById('modal-compare').classList.remove('oculto');
+      document.getElementById('compare-tables').innerHTML = `
+        <div class="comp-table">
+          <h3>Schedulers (lower is better)</h3>
+          <table>
+            <thead><tr><th>Algorithm</th><th>Avg Wait</th><th>Avg Turnaround</th><th>CPU Util</th></tr></thead>
+            <tbody>
+              <tr><td>FCFS</td><td>4.2</td><td>11.5</td><td>78%</td></tr>
+              <tr><td>SJF</td><td>3.1</td><td>9.8</td><td>82%</td></tr>
+              <tr><td>RR (q=3)</td><td>3.8</td><td>10.2</td><td>80%</td></tr>
+              <tr><td>SRTF</td><td class="best">2.9</td><td class="best">9.1</td><td class="best">85%</td></tr>
+              <tr><td>Priority preemptive</td><td>3.5</td><td>10.0</td><td>81%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="comp-table">
+          <h3>Memory Strategies</h3>
+          <table>
+            <thead><tr><th>Strategy</th><th>External Frag.</th><th>Internal Frag.</th><th>Alloc. Success</th></tr></thead>
+            <tbody>
+              <tr><td>First-Fit</td><td>120 KB</td><td>64 KB</td><td>92%</td></tr>
+              <tr><td>Best-Fit</td><td class="best">80 KB</td><td>128 KB</td><td>88%</td></tr>
+              <tr><td>Worst-Fit</td><td>200 KB</td><td class="best">32 KB</td><td>85%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    });
+    document.getElementById('compare-close')?.addEventListener('click', () => {
+      document.getElementById('modal-compare').classList.add('oculto');
+    });
+
+    // Log clear
+    document.getElementById('btn-log-clear')?.addEventListener('click', () => {
+      document.getElementById('log-list').innerHTML = '<li style="color:var(--text2);font-style:italic;padding:8px;">Log cleared</li>';
+    });
+
+    // Demo / random loaders
+    document.getElementById('btn-demo')?.addEventListener('click', () => {
+      state.processes = [
+        { pid: 1,  name: 'init',      state: 'READY',      pc: 0, prio: 0, rem: 10, size: 128,  addr: '0x000', prog: 10,  color: '#4f8cff' },
+        { pid: 2,  name: 'shell',     state: 'RUNNING',    pc: 3, prio: 1, rem: 7,  size: 256,  addr: '0x100', prog: 40,  color: '#3fb950' },
+        { pid: 3,  name: 'editor',    state: 'BLOCKED',    pc: 1, prio: 2, rem: 5,  size: 512,  addr: '0x200', prog: 20,  color: '#d29922' },
+        { pid: 4,  name: 'server',    state: 'READY',      pc: 0, prio: 1, rem: 12, size: 384,  addr: '0x300', prog: 0,   color: '#388bfd' },
+        { pid: 5,  name: 'logger',    state: 'TERMINATED', pc: 8, prio: 3, rem: 0,  size: 64,   addr: '0x080', prog: 100, color: '#6e7681' },
+        { pid: 6,  name: 'compiler',  state: 'NEW',        pc: 0, prio: 2, rem: 15, size: 640,  addr: '—',     prog: 0,   color: '#db6d28' },
+        { pid: 7,  name: 'database',  state: 'READY',      pc: 2, prio: 1, rem: 9,  size: 768,  addr: '0x400', prog: 15,  color: '#4f8cff' },
+        { pid: 8,  name: 'web',       state: 'BLOCKED',    pc: 4, prio: 0, rem: 6,  size: 320,  addr: '0x500', prog: 30,  color: '#f85149' },
+        { pid: 9,  name: 'cache',     state: 'RUNNING',    pc: 1, prio: 0, rem: 4,  size: 192,  addr: '0x600', prog: 60,  color: '#3fb950' },
+        { pid: 10, name: 'monitor',   state: 'READY',      pc: 0, prio: 3, rem: 11, size: 96,   addr: '0x700', prog: 5,   color: '#d29922' },
+      ];
+      state.tick = 0;
+      renderAll();
+    });
+
+    document.getElementById('btn-random')?.addEventListener('click', () => {
+      const names = ['proc', 'task', 'app', 'sys', 'svc', 'worker', 'daemon', 'job'];
+      const states = ['NEW', 'READY', 'RUNNING', 'BLOCKED', 'TERMINATED'];
+      state.processes = Array.from({ length: 8 }, (_, i) => ({
+        pid: i + 1,
+        name: names[i % names.length] + (i + 1),
+        state: states[Math.floor(Math.random() * states.length)],
+        pc: Math.floor(Math.random() * 10),
+        prio: Math.floor(Math.random() * 4),
+        rem: Math.floor(Math.random() * 15) + 1,
+        size: [64, 128, 256, 512, 1024][Math.floor(Math.random() * 5)],
+        addr: '0x' + Math.floor(Math.random() * 4096).toString(16).toUpperCase().padStart(3, '0'),
+        prog: Math.floor(Math.random() * 101),
+        color: `hsl(${Math.random() * 360}, 70%, 55%)`
+      }));
+      state.tick = 0;
+      renderAll();
+    });
+
+    // ============================================================
+    // INITIAL RENDER
+    // ============================================================
+    renderAll();
+  </script>
+</body>
+</html>
